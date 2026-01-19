@@ -13,18 +13,26 @@ public class JournalEntry {
     private String activityType;
     private boolean isConsuming;
     private boolean isProductive;
+    private String note;
 
     // Default constructor for JSON deserialization
     public JournalEntry() {
+        this.note = "";
     }
 
     public JournalEntry(LocalDateTime startTime, LocalDateTime endTime, 
                        String activityType, boolean isConsuming, boolean isProductive) {
+        this(startTime, endTime, activityType, isConsuming, isProductive, "");
+    }
+
+    public JournalEntry(LocalDateTime startTime, LocalDateTime endTime, 
+                       String activityType, boolean isConsuming, boolean isProductive, String note) {
         this.startTime = startTime;
         this.endTime = endTime;
         this.activityType = activityType;
         this.isConsuming = isConsuming;
         this.isProductive = isProductive;
+        this.note = note != null ? note : "";
     }
 
     // Getters and Setters
@@ -68,6 +76,14 @@ public class JournalEntry {
         isProductive = productive;
     }
 
+    public String getNote() {
+        return note != null ? note : "";
+    }
+
+    public void setNote(String note) {
+        this.note = note != null ? note : "";
+    }
+
     /**
      * Calculates the duration of this activity in hours.
      */
@@ -82,12 +98,14 @@ public class JournalEntry {
     @Override
     public String toString() {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-        return String.format("Activity: %s | %s - %s | Consuming: %s | Productive: %s | Duration: %.2f hours",
+        String noteStr = (note != null && !note.trim().isEmpty()) ? " | Note: " + note : "";
+        return String.format("Activity: %s | %s - %s | Consuming: %s | Productive: %s | Duration: %.2f hours%s",
                 activityType,
                 startTime != null ? startTime.format(formatter) : "N/A",
                 endTime != null ? endTime.format(formatter) : "N/A",
                 isConsuming,
                 isProductive,
-                getDurationHours());
+                getDurationHours(),
+                noteStr);
     }
 }

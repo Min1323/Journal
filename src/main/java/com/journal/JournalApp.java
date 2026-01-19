@@ -81,6 +81,10 @@ public class JournalApp {
             return;
         }
 
+        // Get note (optional)
+        System.out.print("Enter note (optional, press Enter to skip): ");
+        String note = scanner.nextLine().trim();
+
         // Get is_consuming flag
         boolean isConsuming = getBooleanInput("Is this activity consuming? (y/n): ");
 
@@ -88,7 +92,7 @@ public class JournalApp {
         boolean isProductive = getBooleanInput("Is this activity productive? (y/n): ");
 
         // Create and save entry
-        JournalEntry entry = new JournalEntry(startTime, endTime, activityType, isConsuming, isProductive);
+        JournalEntry entry = new JournalEntry(startTime, endTime, activityType, isConsuming, isProductive, note);
         
         try {
             journalManager.saveEntry(entry);

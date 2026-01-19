@@ -34,6 +34,7 @@ public class JournalGUI extends JFrame {
     private JTextField endDateField;
     private JTextField endTimeField;
     private JTextField activityTypeField;
+    private JTextArea noteTextArea;
     private JCheckBox isConsumingCheckBox;
     private JCheckBox isProductiveCheckBox;
     private JTextArea collisionWarningArea;
@@ -179,20 +180,39 @@ public class JournalGUI extends JFrame {
         activityTypeField = new JTextField(15);
         formPanel.add(activityTypeField, gbc);
         
-        // Is Consuming
+        // Note
         gbc.gridx = 0; gbc.gridy = 5;
+        gbc.anchor = GridBagConstraints.NORTHWEST;
+        formPanel.add(new JLabel("Note:"), gbc);
+        gbc.gridx = 1;
+        gbc.fill = GridBagConstraints.BOTH;
+        gbc.weightx = 1.0;
+        gbc.weighty = 0.5;
+        noteTextArea = new JTextArea(3, 15);
+        noteTextArea.setLineWrap(true);
+        noteTextArea.setWrapStyleWord(true);
+        noteTextArea.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+        JScrollPane noteScroll = new JScrollPane(noteTextArea);
+        formPanel.add(noteScroll, gbc);
+        gbc.fill = GridBagConstraints.NONE;
+        gbc.weightx = 0.0;
+        gbc.weighty = 0.0;
+        
+        // Is Consuming
+        gbc.gridx = 0; gbc.gridy = 6;
+        gbc.anchor = GridBagConstraints.WEST;
         formPanel.add(new JLabel("Flags:"), gbc);
         gbc.gridx = 1;
         isConsumingCheckBox = new JCheckBox("Is Consuming");
         formPanel.add(isConsumingCheckBox, gbc);
         
         // Is Productive
-        gbc.gridx = 1; gbc.gridy = 6;
+        gbc.gridx = 1; gbc.gridy = 7;
         isProductiveCheckBox = new JCheckBox("Is Productive");
         formPanel.add(isProductiveCheckBox, gbc);
         
         // Buttons
-        gbc.gridx = 0; gbc.gridy = 7;
+        gbc.gridx = 0; gbc.gridy = 8;
         gbc.gridwidth = 2;
         gbc.anchor = GridBagConstraints.CENTER;
         JPanel buttonPanel = new JPanel(new FlowLayout());
@@ -212,7 +232,7 @@ public class JournalGUI extends JFrame {
         formPanel.add(buttonPanel, gbc);
         
         // Collision warning area
-        gbc.gridx = 0; gbc.gridy = 8;
+        gbc.gridx = 0; gbc.gridy = 9;
         gbc.gridwidth = 2;
         gbc.fill = GridBagConstraints.BOTH;
         gbc.weightx = 1.0;
@@ -234,14 +254,48 @@ public class JournalGUI extends JFrame {
     }
 
     private void refreshDateTime() {
-        LocalDateTime now = LocalDateTime.now();
         DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
         DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
         
-        startDateField.setText(now.format(dateFormatter));
-        startTimeField.setText(now.format(timeFormatter));
-        endDateField.setText(now.format(dateFormatter));
-        endTimeField.setText(now.format(timeFormatter));
+        // Determine which date to use - try to parse from startDateField, otherwise use today
+        LocalDate targetDate;
+        try {
+            String dateText = startDateField.getText().trim();
+            if (!dateText.isEmpty()) {
+                targetDate = LocalDate.parse(dateText, dateFormatter);
+            } else {
+                targetDate = LocalDate.now();
+            }
+        } catch (Exception e) {
+            targetDate = LocalDate.now();
+        }
+        
+        // Get the end time of the last activity for the target date, or use 00:00 if no activities exist
+        LocalDateTime startTime;
+        LocalDateTime lastActivityEndTime = journalManager.getLastActivityEndTime(targetDate);
+        
+        if (lastActivityEndTime != null) {
+            // Use the end time of the last activity
+            startTime = lastActivityEndTime;
+        } else {
+            // No activities for this date, use midnight (00:00)
+            startTime = targetDate.atStartOfDay();
+        }
+        
+        // Set start date/time
+        startDateField.setText(startTime.format(dateFormatter));
+        startTimeField.setText(startTime.format(timeFormatter));
+        
+        // Set end date/time to current time (or same as start if no activities)
+        LocalDateTime endTime = LocalDateTime.now();
+        // If start time is in the future or if start date is not today, use start time + 1 hour
+        if (endTime.isBefore(startTime) || endTime.isEqual(startTime) || 
+            !startTime.toLocalDate().equals(LocalDate.now())) {
+            endTime = startTime.plusHours(1); // Default to 1 hour duration
+        }
+        
+        endDateField.setText(endTime.format(dateFormatter));
+        endTimeField.setText(endTime.format(timeFormatter));
         
         // Check for collisions when date/time changes
         checkCollisions();
@@ -336,8 +390,11 @@ public class JournalGUI extends JFrame {
             boolean isConsuming = isConsumingCheckBox.isSelected();
             boolean isProductive = isProductiveCheckBox.isSelected();
             
+            // Get note
+            String note = noteTextArea.getText().trim();
+            
             // Check for collisions
-            JournalEntry newEntry = new JournalEntry(startTime, endTime, activityType, isConsuming, isProductive);
+            JournalEntry newEntry = new JournalEntry(startTime, endTime, activityType, isConsuming, isProductive, note);
             List<JournalEntry> collisions = journalManager.checkCollisions(newEntry);
             
             if (!collisions.isEmpty()) {
@@ -377,6 +434,7 @@ public class JournalGUI extends JFrame {
     private void clearAddActivityForm() {
         refreshDateTime();
         activityTypeField.setText("");
+        noteTextArea.setText("");
         isConsumingCheckBox.setSelected(false);
         isProductiveCheckBox.setSelected(false);
         collisionWarningArea.setText("");

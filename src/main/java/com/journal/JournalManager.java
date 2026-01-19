@@ -168,4 +168,23 @@ public class JournalManager {
         
         return collisions;
     }
+
+    /**
+     * Gets the end time of the last activity for a specific date.
+     * Returns null if no activities exist for that date.
+     */
+    public LocalDateTime getLastActivityEndTime(LocalDate date) {
+        List<JournalEntry> entries = loadEntriesForDate(date);
+        
+        if (entries.isEmpty()) {
+            return null;
+        }
+        
+        // Find the entry with the latest end time
+        return entries.stream()
+                .filter(e -> e.getEndTime() != null)
+                .map(JournalEntry::getEndTime)
+                .max(LocalDateTime::compareTo)
+                .orElse(null);
+    }
 }
