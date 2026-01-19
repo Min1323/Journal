@@ -502,7 +502,7 @@ public class JournalGUI extends JFrame {
 
     private JPanel createActivitiesPanel() {
         JPanel panel = new JPanel(new BorderLayout());
-        panel.setBorder(new TitledBorder("Main Activities (Cumulative Hours)"));
+        panel.setBorder(new TitledBorder("Main Activities (Cumulative Hours) - Double-click for details"));
         
         JList<String> activitiesList = new JList<>();
         activitiesList.setName("activitiesList");
@@ -513,6 +513,18 @@ public class JournalGUI extends JFrame {
                 String selected = activitiesList.getSelectedValue();
                 if (selected != null) {
                     showActivityDetails(selected);
+                }
+            }
+        });
+        
+        // Add double-click listener
+        activitiesList.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseClicked(java.awt.event.MouseEvent evt) {
+                if (evt.getClickCount() == 2) {
+                    String selected = activitiesList.getSelectedValue();
+                    if (selected != null) {
+                        showActivityDetailsDialog(selected);
+                    }
                 }
             }
         });
@@ -669,6 +681,167 @@ public class JournalGUI extends JFrame {
         String activityName = selected.trim().split("\\s+")[0];
         detailsTextArea.append("\n\nSelected Activity: " + activityName + "\n");
         // Could add more detailed breakdown here in the future
+    }
+
+    private void showActivityDetailsDialog(String selected) {
+        // Extract main category name from the formatted string
+        String mainCategory = selected.trim().split("\\s+")[0];
+        
+        // Determine date filter based on current view
+        LocalDate dateFilter = null;
+        if (dayViewRadio.isSelected()) {
+            String selectedDate = (String) dateComboBox.getSelectedItem();
+            if (selectedDate != null && !selectedDate.equals("No data available")) {
+                try {
+                    dateFilter = LocalDate.parse(selectedDate, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+                } catch (Exception e) {
+                    // Invalid date, use lifetime view
+                }
+            }
+        }
+        
+        // Get all entries for this main category
+        List<JournalEntry> entries = analysisService.getEntriesByMainCategory(mainCategory, dateFilter);
+        
+        if (entries.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    "No activities found for category: " + mainCategory,
+                    "No Activities", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        
+        // Create and show dialog
+        JDialog dialog = new JDialog(this, "Activities: " + mainCategory, true);
+        dialog.setSize(1000, 600);
+        dialog.setLocationRelativeTo(this);
+        
+        // Create table model
+        String[] columnNames = {"Date", "Start Time", "End Time", "Activity", "Duration (hrs)", 
+                               "Consuming", "Productive", "Note"};
+        Object[][] data = new Object[entries.size()][8];
+        
+        DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+        DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
+        
+        // Sort entries by date and start time
+        entries.sort((a, b) -> {
+            int dateCompare = a.getStartTime().toLocalDate().compareTo(b.getStartTime().toLocalDate());
+            if (dateCompare != 0) return dateCompare;
+            return a.getStartTime().compareTo(b.getStartTime());
+        });
+        
+        for (int i = 0; i < entries.size(); i++) {
+            JournalEntry entry = entries.get(i);
+            data[i][0] = entry.getStartTime().toLocalDate().format(dateFormatter);
+            data[i][1] = entry.getStartTime().format(timeFormatter);
+            data[i][2] = entry.getEndTime().format(timeFormatter);
+            data[i][3] = entry.getActivityType();
+            data[i][4] = String.format("%.2f", entry.getDurationHours());
+            data[i][5] = entry.isConsuming() ? "Yes" : "No";
+            data[i][6] = entry.isProductive() ? "Yes" : "No";
+            data[i][7] = entry.getNote() != null && !entry.getNote().trim().isEmpty() 
+                        ? entry.getNote() : "-";
+        }
+        
+        javax.swing.table.DefaultTableModel model = new javax.swing.table.DefaultTableModel(data, columnNames) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
+        
+        JTable table = new JTable(model);
+        table.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+        table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+        
+        // Set column widths
+        table.getColumnModel().getColumn(0).setPreferredWidth(100); // Date
+        table.getColumnModel().getColumn(1).setPreferredWidth(80);  // Start Time
+        table.getColumnModel().getColumn(2).setPreferredWidth(80);  // End Time
+        table.getColumnModel().getColumn(3).setPreferredWidth(200);  // Activity
+        table.getColumnModel().getColumn(4).setPreferredWidth(100);  // Duration
+        table.getColumnModel().getColumn(5).setPreferredWidth(80);   // Consuming
+        table.getColumnModel().getColumn(6).setPreferredWidth(80);   // Productive
+        table.getColumnModel().getColumn(7).setPreferredWidth(400);  // Note - wider for full text
+        
+        // Custom cell renderer for note column (column 7) to wrap text
+        table.getColumnModel().getColumn(7).setCellRenderer(new javax.swing.table.TableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value,
+                    boolean isSelected, boolean hasFocus, int row, int column) {
+                JTextArea textArea = new JTextArea();
+                String text = value != null ? value.toString() : "";
+                textArea.setText(text);
+                textArea.setWrapStyleWord(true);
+                textArea.setLineWrap(true);
+                textArea.setFont(table.getFont());
+                textArea.setOpaque(true);
+                textArea.setBorder(javax.swing.BorderFactory.createEmptyBorder(4, 4, 4, 4));
+                
+                if (isSelected) {
+                    textArea.setBackground(table.getSelectionBackground());
+                    textArea.setForeground(table.getSelectionForeground());
+                } else {
+                    textArea.setBackground(table.getBackground());
+                    textArea.setForeground(table.getForeground());
+                }
+                
+                return textArea;
+            }
+        });
+        
+        // Calculate and set row heights based on note content
+        int noteColumnWidth = table.getColumnModel().getColumn(7).getPreferredWidth();
+        int defaultRowHeight = 25;
+        
+        for (int i = 0; i < table.getRowCount(); i++) {
+            String note = (String) table.getValueAt(i, 7);
+            if (note != null && !note.equals("-") && !note.trim().isEmpty()) {
+                // Calculate height needed for wrapped text
+                JTextArea tempArea = new JTextArea(note);
+                tempArea.setWrapStyleWord(true);
+                tempArea.setLineWrap(true);
+                tempArea.setFont(table.getFont());
+                tempArea.setSize(noteColumnWidth - 20, Short.MAX_VALUE);
+                int preferredHeight = tempArea.getPreferredSize().height;
+                table.setRowHeight(i, Math.max(defaultRowHeight, preferredHeight + 8));
+            } else {
+                table.setRowHeight(i, defaultRowHeight);
+            }
+        }
+        
+        // Enable column reordering
+        table.getTableHeader().setReorderingAllowed(true);
+        
+        JScrollPane scrollPane = new JScrollPane(table);
+        scrollPane.setBorder(BorderFactory.createTitledBorder(
+                String.format("Total: %d activities", entries.size())));
+        
+        // Summary panel
+        double totalHours = entries.stream()
+                .mapToDouble(JournalEntry::getDurationHours)
+                .sum();
+        JLabel summaryLabel = new JLabel(String.format(
+                "Total Duration: %.2f hours | Main Category: %s", 
+                totalHours, mainCategory));
+        summaryLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
+        
+        JPanel summaryPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        summaryPanel.add(summaryLabel);
+        
+        // Close button
+        JButton closeButton = new JButton("Close");
+        closeButton.addActionListener(e -> dialog.dispose());
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        buttonPanel.add(closeButton);
+        
+        // Layout
+        dialog.setLayout(new BorderLayout(10, 10));
+        dialog.add(summaryPanel, BorderLayout.NORTH);
+        dialog.add(scrollPane, BorderLayout.CENTER);
+        dialog.add(buttonPanel, BorderLayout.SOUTH);
+        
+        dialog.setVisible(true);
     }
 
     private void clearDisplay() {

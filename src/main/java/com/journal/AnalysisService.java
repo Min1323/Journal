@@ -159,4 +159,38 @@ public class AnalysisService {
         
         return categoryManager.getRootCategory();
     }
+
+    /**
+     * Gets all entries that belong to a specific main activity category (first word).
+     * @param mainCategory The main category name (first word of activity)
+     * @param dateFilter If not null, only returns entries for this date. If null, returns all entries.
+     * @return List of entries matching the main category
+     */
+    public List<JournalEntry> getEntriesByMainCategory(String mainCategory, LocalDate dateFilter) {
+        List<JournalEntry> result = new ArrayList<>();
+        List<LocalDate> datesToCheck;
+        
+        if (dateFilter != null) {
+            datesToCheck = new ArrayList<>();
+            datesToCheck.add(dateFilter);
+        } else {
+            datesToCheck = journalManager.getAvailableDates();
+        }
+        
+        String mainCategoryLower = mainCategory.toLowerCase();
+        
+        for (LocalDate date : datesToCheck) {
+            List<JournalEntry> entries = journalManager.loadEntriesForDate(date);
+            for (JournalEntry entry : entries) {
+                if (entry.getActivityType() != null) {
+                    List<String> tokens = categoryManager.tokenizeActivity(entry.getActivityType());
+                    if (!tokens.isEmpty() && tokens.get(0).toLowerCase().equals(mainCategoryLower)) {
+                        result.add(entry);
+                    }
+                }
+            }
+        }
+        
+        return result;
+    }
 }
